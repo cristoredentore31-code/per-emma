@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Per Emma">
+<meta name="theme-color" content="#cfeeff">
+<title>Per Emma 💛</title>
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" type="image/png" href="icon.png">
+<style>
+  html,body{margin:0;padding:0;position:fixed;inset:0;overflow:hidden;overscroll-behavior:none;
+    background:linear-gradient(160deg,#bfe6ff,#fff3b8);touch-action:none;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;
+    font-family:ui-rounded,"SF Pro Rounded","Trebuchet MS",system-ui,sans-serif;color:#33466b}
+  #app{position:absolute;width:360px;height:640px;transform-origin:0 0;background:#cfeeff;
+    box-shadow:0 8px 40px rgba(60,90,140,.25);border-radius:14px;overflow:hidden}
+  canvas{position:absolute;left:0;top:0;width:360px;height:640px;display:block;touch-action:none}
+  #ov{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    padding:22px 24px;box-sizing:border-box;text-align:center;
+    background:linear-gradient(170deg,#cfeeff,#fff7c8);overflow:hidden}
+  #ov h1{margin:0 0 6px;font-size:34px;color:#e0a800;text-shadow:0 2px 0 #fff}
+  #ov h2{margin:0 0 10px;font-size:22px;color:#3b7fb8}
+  #ov p{margin:6px 0;font-size:16px;line-height:1.4}
+  #ov small{opacity:.7;font-size:12px}
+  .btn{margin:8px 4px 0;padding:12px 26px;font-size:18px;font-weight:700;border:0;border-radius:999px;
+    background:#ffd95a;color:#5a4400;box-shadow:0 4px 0 #d9a900;font-family:inherit;cursor:pointer}
+  .btn:active{transform:translateY(3px);box-shadow:0 1px 0 #d9a900}
+  .btn.blue{background:#8fd0ff;color:#12456b;box-shadow:0 4px 0 #5aa6dc}
+  .steps{text-align:left;font-size:14px;background:rgba(255,255,255,.7);border-radius:14px;padding:8px 14px;margin:8px 0;line-height:1.45}
+  .photo{max-width:280px;max-height:230px;border-radius:14px;border:4px solid #fff;box-shadow:0 4px 14px rgba(0,0,0,.2);margin-bottom:10px;transform:rotate(-2deg)}
+  .choices{display:flex;flex-direction:column;gap:10px;margin-top:10px;width:100%}
+  .choice{display:flex;align-items:center;gap:14px;padding:12px 18px;font-size:19px;font-weight:700;
+    background:#fff;border:3px solid #ffd95a;border-radius:18px;font-family:inherit;color:#33466b;cursor:pointer}
+  .choice span{font-size:34px}
+  .choice:active{background:#fff3b8}
+  .heart{position:absolute;bottom:-40px;font-size:24px;animation:up linear forwards;pointer-events:none}
+  @keyframes up{to{transform:translateY(-720px) rotate(20deg);opacity:0}}
+  #ov>*:not(.heart){position:relative;z-index:1}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="cv"></canvas>
+  <div id="ov"></div>
+</div>
+
+<script>
+/* ============ CONFIGURAZIONE (modifica qui!) ============ */
+const CFG = {
+  // Il tuo nome, come compare nella schermata iniziale.
+  firma: 'Diego',
+  // Il tuo numero WhatsApp in formato internazionale senza + e senza spazi (es. '393331234567').
+  // Se resta vuoto, WhatsApp le fa scegliere a chi mandare il messaggio.
+  whatsapp: '',
+  // Messaggi del finale. "photo" è opzionale: metti i file accanto a index.html (foto1.jpg, foto2.jpg...)
+  msgs: [
+    { t: "Ce l'hai fatta, Emma. 💛<br>Hai fermato bugie, silenzi, dubbi, rabbia e orgoglio.<br><br>Ma c'è un nemico che non potevi battere tu: l'errore più grande l'ho fatto io." },
+    { t: "Ti ho tradita.<br>Non c'è nessuna scusa e nessuna spiegazione che lo renda meno brutto.<br><br>Mi dispiace davvero, nel modo più sincero che ho." },
+    { t: "Mi manca la nostra panchina, il tramonto, le serate alla balera, quando sei svampita e quando ti comporti da bambina, che è una delle cose che amo di più di te.<br><br>Mi hai detto che ti manco tanto. Anche tu mi manchi tantissimo, cucciola.", photo: 'foto1.jpg' },
+    { t: "Non ti chiedo di perdonarmi oggi, né di far finta che vada tutto bene.<br><br>Ti chiedo solo che, quando e se te la senti, mi lasci dimostrarti che posso essere la persona che meriti.<br>Tutto con i tuoi tempi.", photo: 'foto2.jpg' },
+    { t: "Intanto ti devo una cena.<br>Scegli tu dove, senza nessun impegno. 🍔🍣🍝" }
+  ],
+  dinners: [
+    { e: '🍔', n: "McDonald's" },
+    { e: '🍣', n: 'Sushi' },
+    { e: '🍝', n: 'Ristorante italiano' }
+  ]
+};
+
+/* ============ COSTANTI ============ */
+const C = 40, COLS = 9, ROWS = 12, FY = 56;      // dimensione cella, colonne, righe, y d'inizio campo
+const BAR_Y = FY + ROWS * C;                     // 536
+const WP = [[-1,1],[7,1],[7,4],[1,4],[1,7],[7,7],[7,10],[4,10],[4,11]];
+const DECOR = {'4,2':'🍔','4,5':'🍣','4,8':'🍝','0,11':'🪩','8,11':'🌷'};   // 🪩 = la balera
+const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+const MAXL = 4, START_LIVES = 8, FIRST_CD = 30, GAP_CD = 10, WAVE_BONUS = 25;
+const LVL_COL = ['#8fd0ff', '#7be0a0', '#ffb347', '#ff6b9d'];
+
+const EN = {
+  bugia:    { e:'🤥', hp:42,   sp:42, rw:6 },
+  silenzio: { e:'😶', hp:31,   sp:72, rw:6 },
+  dubbio:   { e:'🌫️', hp:133,  sp:30, rw:12 },
+  distanza: { e:'📏', hp:17,   sp:88, rw:4 },
+  orgoglio: { e:'🛡️', hp:154,  sp:28, rw:14, armor:4 },      // i colpi piccoli fanno poco
+  rabbia:   { e:'😡', hp:91,   sp:58, rw:10, noslow:true },   // ignora l'abbraccio
+  errore:   { e:'💔', hp:2100, sp:22, rw:150, boss:true, armor:2 }
+};
+const TW = {
+  bacino:    { e:'💋', n:'Bacino',    f:0, cost:30, rng:78,  rate:0.55, dmg:7,  d:['Spara veloce,','danni piccoli'],
+               info:'Spara veloce, danni piccoli. Ottimo contro i gruppi.' },
+  abbraccio: { e:'🤗', n:'Abbraccio', f:0,cost:50, rng:70,  rate:1.0,  dmg:3,  slow:0.55, d:['Rallenta tutti','quelli vicini'],
+               info:'Rallenta tutti i nemici vicini. Non ferma la 😡 Rabbia.' },
+  lettera:   { e:'💌', n:'Lettera',   f:1,cost:75, rng:150, rate:1.8,  dmg:44, d:['Colpo forte,','lunga gittata'],
+               info:'Colpo fortissimo da lontano. Perfetta contro 🛡️ e i boss.' }
+};
+const TW_KEYS = ['bacino', 'abbraccio', 'lettera'];
+const WAVES = [
+  { t:'Arrivano le Bugie!',        g:[['bugia',6,1.4]] },
+  { t:'Bugie e Silenzi',           g:[['bugia',8,1.1],['silenzio',3,1.2]] },
+  { t:'Le Distanze si avvicinano', g:[['distanza',14,0.6]] },
+  { t:'Quanti Dubbi...',           g:[['dubbio',4,2],['bugia',8,1]] },
+  { t:'Rabbia!',                   g:[['rabbia',6,1.2],['silenzio',6,0.8]] },
+  { t:"L'Orgoglio",                g:[['orgoglio',4,2],['bugia',10,0.9]] },
+  { t:'Tutti insieme',             g:[['distanza',16,0.5],['rabbia',6,1],['dubbio',4,1.6]] },
+  { t:'Muro di Orgoglio',          g:[['orgoglio',6,1.6],['dubbio',6,1.4],['silenzio',8,0.7]] },
+  { t:'Tempesta',                  g:[['rabbia',10,0.8],['orgoglio',6,1.4],['distanza',16,0.4]] },
+  { t:"L'errore più grande",       g:[['bugia',6,0.8],['errore',1,0],['orgoglio',4,1.8],['dubbio',5,1.4]] }
+];
+
+/* ============ PERCORSO ============ */
+const PX = WP.map(([c,r]) => [c*C + C/2, FY + r*C + C/2]);
+const SEG = []; let TOT = 0;
+for (let i = 1; i < PX.length; i++) {
+  const a = PX[i-1], b = PX[i], l = Math.hypot(b[0]-a[0], b[1]-a[1]);
+  SEG.push({a, b, s:TOT, l}); TOT += l;
+}
+function posAt(d) {
+  if (d >= TOT) return PX[PX.length-1];
+  for (const g of SEG) if (d <= g.s + g.l) {
+    const f = (d - g.s) / g.l;
+    return [g.a[0] + (g.b[0]-g.a[0])*f, g.a[1] + (g.b[1]-g.a[1])*f];
+  }
+  return PX[PX.length-1];
+}
+const pathCells = new Set();
+for (let i = 1; i < WP.length; i++) {
+  let [c,r] = WP[i-1]; const [c1,r1] = WP[i];
+  const dc = Math.sign(c1-c), dr = Math.sign(r1-r);
+  while (true) { pathCells.add(c+','+r); if (c===c1 && r===r1) break; c += dc; r += dr; }
+}
+
+/* ============ STATO ============ */
+const app = document.getElementById('app'), cv = document.getElementById('cv'), ctx = cv.getContext('2d'), ov = document.getElementById('ov');
+let S = 1, DPR = Math.min(window.devicePixelRatio || 1, 3);
+let st = null, ui = [], sound = true, ac = null, nid = 0, last = performance.now(), clock = 0, drag = null;
+
+function newGame() {
+  st = { wave:0, cd:FIRST_CD, time:0, money:120, lives:START_LIVES, towers:[], en:[], proj:[], fx:[], spawn:[],
+         speed:1, sel:null, selT:null, sellArm:null, banner:null, over:false, paused:false, merged:false };
+  drag = null;
+}
+function save() {
+  // a metà ondata salva l'ondata in corso, così "Continua" la rigioca invece di saltarla
+  const busy = st.spawn.length || st.en.length;
+  try {
+    localStorage.setItem('emma_td2', JSON.stringify({ wave: Math.max(0, st.wave - (busy ? 1 : 0)), money:st.money, lives:st.lives,
+      merged: st.merged, towers: st.towers.map(t => [t.type, t.c, t.r, t.lvl, t.spent]) }));
+  } catch(e) {}
+}
+function loadSave() {
+  try {
+    const d = JSON.parse(localStorage.getItem('emma_td2'));
+    if (!d || d.wave >= WAVES.length || (d.wave < 1 && !d.towers.length)) return null;
+    return d;
+  } catch(e) { return null; }
+}
+function clearSave() { try { localStorage.removeItem('emma_td2'); } catch(e) {} }
+
+/* ============ AUDIO ============ */
+function initAudio() {
+  try {
+    if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === 'suspended') ac.resume();
+  } catch(e) {}
+}
+function beep(f, d = .08, type = 'sine', v = .05, delay = 0) {
+  if (!sound || !ac) return;
+  try {
+    const o = ac.createOscillator(), g = ac.createGain(), t0 = ac.currentTime + delay;
+    o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(v, t0); g.gain.exponentialRampToValueAtTime(.0001, t0 + d);
+    o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t0 + d + .02);
+  } catch(e) {}
+}
+
+/* ============ RIDIMENSIONAMENTO ============ */
+function resize() {
+  const vv = window.visualViewport, W = vv ? vv.width : innerWidth, H = vv ? vv.height : innerHeight;
+  S = Math.min(W/360, H/640);
+  app.style.transform = 'scale(' + S + ')';
+  app.style.left = ((W - 360*S)/2) + 'px';
+  app.style.top = ((H - 640*S)/2) + 'px';
+  cv.width = Math.round(360*S*DPR); cv.height = Math.round(640*S*DPR);
+}
+addEventListener('resize', resize);
+if (window.visualViewport) visualViewport.addEventListener('resize', resize);
+
+/* ============ LOGICA ============ */
+function waveQueue(i) {
+  const q = []; let t = 0;
+  for (const [ty, n, gap] of WAVES[i].g) { for (let k = 0; k < n; k++) { q.push({ t, ty }); t += gap; } t += 1.5; }
+  return q;
+}
+function preview(i) {
+  const m = {};
+  for (const [ty, n] of WAVES[i].g) m[ty] = (m[ty] || 0) + n;
+  return Object.entries(m).map(([k, n]) => EN[k].e + '×' + n).join(' ');
+}
+function startWave() {
+  if (st.wave >= WAVES.length) return;
+  const q = waveQueue(st.wave);
+  q.forEach(s => st.spawn.push({ t: st.time + s.t, ty: s.ty, w: st.wave }));
+  const dur = q.length ? q[q.length-1].t : 0;
+  st.money += WAVE_BONUS;
+  st.banner = { txt: 'Ondata ' + (st.wave+1) + ': ' + WAVES[st.wave].t, t: 2.6 };
+  st.wave++;
+  st.cd = st.wave < WAVES.length ? dur + GAP_CD : null;   // prossima ondata dopo l'ultimo spawn
+  beep(440, .1, 'triangle'); beep(660, .12, 'triangle', .05, .1);
+  save();
+}
+function spawnEn(ty, w) {
+  const d = EN[ty], hp = d.hp * (1 + 0.12 * w);
+  st.en.push({ id: nid++, ty, e: d.e, hp, max: hp, sp: d.sp, d: 0, p: posAt(0), slowT: 0, slowF: 1, boss: !!d.boss, rw: d.rw,
+               armor: d.armor || 0, noslow: !!d.noslow, dead: false, flash: 0 });
+}
+function tstat(t) {
+  const b = TW[t.type], l = t.lvl - 1;
+  return { dmg: b.dmg * Math.pow(2.1, l), rng: b.rng * (1 + 0.1*l), rate: b.rate * Math.pow(0.92, l),
+           slow: b.slow ? Math.max(0.25, b.slow - 0.08*l) : 1 };
+}
+function addTower(type, c, r, lvl = 1, spent) {
+  const t = { type, c, r, x: c*C + C/2, y: FY + r*C + C/2, lvl, cd: 0.2, spent: spent || TW[type].cost };
+  st.towers.push(t); return t;
+}
+function floatTxt(x, y, txt, color = '#e08a00', size = 14) {
+  st.fx.push({ x, y, txt, color, size, t: 0, life: .9 });
+}
+function hurt(e, d) {
+  if (e.dead) return;
+  e.hp -= Math.max(1, d - e.armor); e.flash = .1;
+  if (e.hp <= 0) {
+    e.dead = true; st.money += e.rw;
+    const p = e.p;
+    floatTxt(p[0], p[1] - 10, '+' + e.rw);
+    for (let i = 0; i < 4; i++) st.fx.push({ x: p[0], y: p[1], vx: (Math.random()-.5)*80, vy: -30 - Math.random()*50, txt: '💛', size: 10, t: 0, life: .8, heart: true });
+    beep(e.boss ? 300 : 880 + Math.random()*200, e.boss ? .5 : .07, 'sine', .05);
+  }
+}
+function leak(e) {
+  e.dead = true;
+  if (st.over) return;
+  st.lives = Math.max(0, st.lives - (e.boss ? st.lives : 1));
+  beep(160, .25, 'sawtooth', .04);
+  floatTxt(PX[PX.length-1][0], PX[PX.length-1][1] - 20, '💔', '#d33', 18);
+  if (st.lives <= 0) lose();
+}
+function update(dt) {
+  clock += dt;
+  if (st.banner) { st.banner.t -= dt; if (st.banner.t <= 0) st.banner = null; }
+  for (const f of st.fx) { f.t += dt; if (f.heart) { f.x += f.vx*dt; f.y += f.vy*dt; f.vy += 120*dt; } else if (!f.ring) f.y -= 22*dt; }
+  st.fx = st.fx.filter(f => f.t < f.life);
+  if (st.over || st.paused) return;
+  dt *= st.speed;
+  st.time += dt;
+
+  if (st.cd !== null) { st.cd -= dt; if (st.cd <= 0) startWave(); }
+  while (st.spawn.length && st.spawn[0].t <= st.time) { const s = st.spawn.shift(); spawnEn(s.ty, s.w); }
+
+  for (const e of st.en) {
+    if (e.dead) continue;
+    e.slowT -= dt; e.flash -= dt;
+    e.d += e.sp * (e.slowT > 0 ? e.slowF : 1) * dt;
+    e.p = posAt(e.d);
+    if (e.d >= TOT) leak(e);
+  }
+  if (st.over) return;
+
+  for (const t of st.towers) {
+    if (drag && drag.moved && drag.t === t) continue;
+    t.cd -= dt;
+    if (t.cd > 0) continue;
+    const s = tstat(t), b = TW[t.type];
+    if (t.type === 'abbraccio') {
+      let hit = false;
+      for (const e of st.en) {
+        if (e.dead) continue;
+        const p = e.p;
+        if (Math.hypot(p[0]-t.x, p[1]-t.y) <= s.rng) {
+          hit = true;
+          if (!e.noslow) { e.slowF = e.slowT > 0 ? Math.min(e.slowF, s.slow) : s.slow; e.slowT = 1.5; }
+          hurt(e, s.dmg);
+        }
+      }
+      if (hit) { t.cd = s.rate; st.fx.push({ ring: true, x: t.x, y: t.y, r: s.rng, t: 0, life: .4 }); beep(300, .08, 'sine', .03); }
+      continue;
+    }
+    let tg = null;
+    for (const e of st.en) {
+      if (e.dead) continue;
+      const p = e.p;
+      if (Math.hypot(p[0]-t.x, p[1]-t.y) <= s.rng && (!tg || e.d > tg.d)) tg = e;
+    }
+    if (tg) {
+      t.cd = s.rate;
+      st.proj.push({ x: t.x, y: t.y, tg, dmg: s.dmg, e: b.e, big: t.type === 'lettera' });
+      beep(t.type === 'lettera' ? 700 : 520, .05, 'triangle', .03);
+    }
+  }
+  for (const p of st.proj) {
+    if (p.tg.dead) { p.done = true; continue; }
+    const q = p.tg.p, dx = q[0]-p.x, dy = q[1]-p.y, dist = Math.hypot(dx, dy), step = 280 * dt;
+    if (dist <= step + 4) { p.done = true; hurt(p.tg, p.dmg); }
+    else { p.x += dx/dist*step; p.y += dy/dist*step; }
+  }
+  st.proj = st.proj.filter(p => !p.done);
+  st.en = st.en.filter(e => !e.dead);
+  if (st.wave >= WAVES.length && !st.spawn.length && !st.en.length && !st.over) win();
+}
+
+/* ============ AZIONI UI ============ */
+function msg(txt) { st.banner = { txt, t: 1.6 }; }
+function cellFree(c, r) {
+  return c >= 0 && c < COLS && r >= 0 && r < ROWS && !pathCells.has(c+','+r) && !DECOR[c+','+r] && !st.towers.some(t => t.c === c && t.r === r);
+}
+function place(c, r) {
+  const b = TW[st.sel];
+  if (st.money < b.cost) { msg('Monete insufficienti 🪙'); beep(200, .12, 'square', .03); return; }
+  st.money -= b.cost; addTower(st.sel, c, r); beep(600, .08, 'triangle'); beep(900, .08, 'triangle', .04, .07);
+  save();
+}
+function sell() {
+  const t = st.selT; if (!t) return;
+  if (st.sellArm !== t) { st.sellArm = t; return; }   // primo tocco: chiede conferma
+  st.money += Math.floor(t.spent * 0.7); st.towers = st.towers.filter(x => x !== t); st.selT = null; st.sellArm = null; beep(400, .1, 'sine'); save();
+}
+function togglePause(force) {
+  if (st.over) return;
+  st.paused = force !== undefined ? force : !st.paused; drag = null;
+}
+function canMerge(a, b) { return a !== b && a.type === b.type && a.lvl === b.lvl && a.lvl < MAXL; }
+function tryMerge(a, b) {
+  if (a.type !== b.type || a.lvl !== b.lvl) { msg('Servono due torri uguali, stesso livello'); beep(200, .12, 'square', .03); return false; }
+  if (a.lvl >= MAXL) { msg('Questa è già al massimo! ✨'); return false; }
+  b.lvl++; b.spent += a.spent; st.towers = st.towers.filter(x => x !== a); st.selT = b; st.merged = true;
+  st.fx.push({ ring: true, x: b.x, y: b.y, r: 40, t: 0, life: .5 });
+  floatTxt(b.x, b.y - 22, 'Livello ' + b.lvl + '!', '#2a8a4a', 15);
+  beep(660, .1, 'triangle'); beep(880, .1, 'triangle', .05, .08); beep(1175, .15, 'triangle', .05, .16);
+  save(); return true;
+}
+function cellAt(x, y) { return [Math.floor(x / C), Math.floor((y - FY) / C)]; }
+function ptr(e) {
+  const r = cv.getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width * 360, (e.clientY - r.top) / r.height * 640];
+}
+cv.addEventListener('pointerdown', e => {
+  e.preventDefault(); initAudio();
+  if (ov.style.display === 'flex' || st.over) return;
+  try { cv.setPointerCapture(e.pointerId); } catch(_) {}
+  const [x, y] = ptr(e);
+  for (let i = ui.length - 1; i >= 0; i--) {
+    const b = ui[i];
+    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { b.fn(); return; }
+  }
+  if (st.paused) { togglePause(false); return; }   // in pausa: un tocco qualsiasi riprende
+  if (y >= FY && y < BAR_Y) {
+    const [c, r] = cellAt(x, y);
+    const tw = st.towers.find(t => t.c === c && t.r === r);
+    if (tw) { drag = { t: tw, x, y, sx: x, sy: y, moved: false }; return; }
+    if (cellFree(c, r) && st.sel) { place(c, r); return; }
+    if (!cellFree(c, r) && st.sel) msg('Qui non si può 🚫');
+    st.selT = null;
+  }
+});
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const [x, y] = ptr(e); drag.x = x; drag.y = y;
+  if (Math.hypot(x - drag.sx, y - drag.sy) > 8) drag.moved = true;
+});
+function endDrag(e) {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (!st || st.over || st.paused) return;
+  const [ux, uy] = ptr(e); d.x = ux; d.y = uy;   // posizione esatta in cui ha lasciato il dito
+  if (Math.hypot(ux - d.sx, uy - d.sy) > 8) d.moved = true;
+  if (!d.moved) { st.selT = d.t; st.sel = null; st.sellArm = null; return; }
+  const [c, r] = cellAt(d.x, d.y);
+  if (d.y < FY || d.y >= BAR_Y || (c === d.t.c && r === d.t.r)) return;
+  const o = st.towers.find(t => t !== d.t && t.c === c && t.r === r);
+  if (o) { tryMerge(d.t, o); return; }
+  if (cellFree(c, r)) { d.t.c = c; d.t.r = r; d.t.x = c*C + C/2; d.t.y = FY + r*C + C/2; beep(500, .06, 'triangle'); save(); }
+  else msg('Qui non si può 🚫');
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', () => { drag = null; });
+// se cambia app o blocca il telefono, il gioco si mette in pausa da solo
+document.addEventListener('visibilitychange', () => { if (document.hidden && st && !st.over) togglePause(true); });
+
+/* ============ DISEGNO ============ */
+function rr(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath();
+}
+function em(t, x, y, size) { ctx.font = size + 'px ' + EMOJI_FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, x, y); }
+function tx(t, x, y, size, color, align = 'center', weight = 'bold', maxW = 344) {
+  t = String(t);
+  do { ctx.font = weight + ' ' + size + 'px ui-rounded,"Trebuchet MS",system-ui,sans-serif'; }
+  while (ctx.measureText(t).width > maxW && (size -= .5) > 7);   // rimpicciolisce il testo se non ci sta
+  ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillText(t, x, y);
+}
+function btn(x, y, w, h, fn, fill, label, size = 14, color = '#5a4400', stroke = '#d9a900') {
+  ui.push({ x, y, w, h, fn });
+  ctx.fillStyle = stroke; rr(x, y + 3, w, h, 10); ctx.fill();
+  ctx.fillStyle = fill; rr(x, y, w, h, 10); ctx.fill();
+  tx(label, x + w/2, y + h/2, size, color, 'center', 'bold', w - 8);
+}
+// suggerimenti per chi gioca la prima volta
+function tip() {
+  if (st.paused) return null;
+  if (!st.towers.length && !st.sel) return '👇 Tocca una torre qui sotto per sceglierla';
+  if (!st.towers.length && st.sel) return 'Ora tocca un quadretto azzurro vicino al sentiero';
+  if (!st.merged) {
+    const pair = st.towers.find(a => st.towers.some(b => canMerge(a, b)));
+    if (pair) { const b = TW[pair.type]; return b.f ? '✨ Trascina una ' + b.e + ' sopra l\'altra ' + b.e + ' per unirle!' : '✨ Trascina un ' + b.e + ' sopra l\'altro ' + b.e + ' per unirli!'; }
+  }
+  return null;
+}
+function drawTower(t, x, y, ghost) {
+  const col = LVL_COL[t.lvl - 1];
+  ctx.globalAlpha = ghost ? .85 : 1;
+  ctx.fillStyle = t === st.selT ? '#ffe27a' : '#fff'; ctx.beginPath(); ctx.arc(x, y, 16 + t.lvl, 0, 7); ctx.fill();
+  ctx.strokeStyle = col; ctx.lineWidth = 2 + t.lvl; ctx.stroke();
+  em(TW[t.type].e, x, y + 1, 19 + t.lvl * 2);
+  if (t.lvl > 1) {
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x + 14, y - 14, 8, 0, 7); ctx.fill();
+    tx(t.lvl, x + 14, y - 13, 11, '#fff');
+  }
+  ctx.globalAlpha = 1;
+}
+
+function draw() {
+  ctx.setTransform(cv.width/360, 0, 0, cv.height/640, 0, 0);
+  ui = [];
+  const g = ctx.createLinearGradient(0, 0, 0, 640); g.addColorStop(0, '#d6f0ff'); g.addColorStop(1, '#eaf8ff');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 360, 640);
+
+  // campo
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const k = c+','+r, x = c*C, y = FY + r*C;
+    if (pathCells.has(k)) { ctx.fillStyle = (c+r)%2 ? '#ffe27a' : '#ffd95a'; ctx.fillRect(x, y, C, C); }
+    else {
+      ctx.fillStyle = (c+r)%2 ? '#dff2ff' : '#d0e9fb'; rr(x+1, y+1, C-2, C-2, 6); ctx.fill();
+      if (st.sel && cellFree(c, r)) { ctx.fillStyle = 'rgba(120,220,150,' + (.18 + .1*Math.sin(clock*5)) + ')'; ctx.fill(); }
+    }
+    if (DECOR[k]) { ctx.globalAlpha = .9; em(DECOR[k], x + C/2, y + C/2 + 1, 24); ctx.globalAlpha = 1; }
+  }
+  em('➡️', C/2, FY + C + C/2, 18);
+  const end = PX[PX.length-1];
+  ctx.fillStyle = 'rgba(255,150,80,.35)'; ctx.beginPath(); ctx.arc(end[0], end[1], 20, 0, 7); ctx.fill();
+  em('🌅', end[0], end[1] - 1, 30);
+  tx('← la nostra panchina', end[0] + 26, end[1] + 4, 11, '#8a6a00', 'left');
+
+  // raggio torre selezionata / trascinata
+  const rt = drag && drag.moved ? drag.t : st.selT;
+  if (rt) {
+    const s = tstat(rt), px = drag && drag.moved ? drag.x : rt.x, py = drag && drag.moved ? drag.y : rt.y;
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.strokeStyle = 'rgba(70,130,200,.7)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(px, py, s.rng, 0, 7); ctx.fill(); ctx.stroke();
+  }
+  // evidenzia le torri con cui si può unire
+  if (drag && drag.moved) {
+    for (const o of st.towers) if (canMerge(drag.t, o)) {
+      ctx.strokeStyle = 'rgba(255,200,0,' + (.55 + .45*Math.sin(clock*10)) + ')'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(o.x, o.y, 25, 0, 7); ctx.stroke();
+    }
+    const [c, r] = cellAt(drag.x, drag.y);
+    if (cellFree(c, r)) { ctx.fillStyle = 'rgba(120,220,150,.45)'; rr(c*C+1, FY + r*C+1, C-2, C-2, 6); ctx.fill(); }
+  }
+  // torri
+  for (const t of st.towers) if (!(drag && drag.moved && drag.t === t)) drawTower(t, t.x, t.y);
+  // nemici
+  for (const e of st.en) {
+    const p = e.p, wob = Math.sin(clock*8 + e.id) * 1.5, sz = e.boss ? 46 : 24;
+    if (e.slowT > 0) { ctx.fillStyle = 'rgba(100,180,255,.4)'; ctx.beginPath(); ctx.arc(p[0], p[1], sz*.6, 0, 7); ctx.fill(); }
+    if (e.flash > 0) ctx.globalAlpha = .6;
+    em(e.e, p[0], p[1] + wob, sz); ctx.globalAlpha = 1;
+    const w = e.boss ? 46 : 22, hy = p[1] - sz*.65;
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(p[0]-w/2, hy, w, 4);
+    ctx.fillStyle = '#ff6b8b'; ctx.fillRect(p[0]-w/2, hy, w * Math.max(0, e.hp/e.max), 4);
+  }
+  for (const p of st.proj) em(p.e, p.x, p.y, p.big ? 16 : 11);
+  if (drag && drag.moved) drawTower(drag.t, drag.x, drag.y - 10, true);
+  // effetti
+  for (const f of st.fx) {
+    const a = 1 - f.t / f.life;
+    if (f.ring) { ctx.strokeStyle = 'rgba(255,140,170,' + a + ')'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (.4 + .6*(1-a)), 0, 7); ctx.stroke(); }
+    else if (f.heart) { ctx.globalAlpha = a; em(f.txt, f.x, f.y, f.size); ctx.globalAlpha = 1; }
+    else { ctx.globalAlpha = Math.min(1, a*1.6); tx(f.txt, f.x, f.y, f.size, f.color); ctx.globalAlpha = 1; }
+  }
+  // banner
+  if (st.banner) {
+    const a = Math.min(1, st.banner.t * 2);
+    ctx.globalAlpha = a; ctx.fillStyle = 'rgba(255,255,255,.92)'; rr(20, 250, 320, 44, 14); ctx.fill();
+    tx(st.banner.txt, 180, 272, 15, '#33466b', 'center', 'bold', 304); ctx.globalAlpha = 1;
+  }
+  // pausa
+  if (st.paused) {
+    ctx.fillStyle = 'rgba(207,238,255,.82)'; ctx.fillRect(0, FY, 360, BAR_Y - FY);
+    tx('⏸️ In pausa', 180, 270, 26, '#3b7fb8');
+    tx('Tocca un punto qualsiasi per continuare', 180, 305, 13, '#33466b', 'center', 'normal');
+  }
+
+  // HUD
+  ctx.fillStyle = '#fff3b8'; ctx.fillRect(0, 0, 360, FY);
+  ctx.fillStyle = '#ffd95a'; ctx.fillRect(0, FY - 3, 360, 3);
+  tx('❤️ ' + st.lives + '   🪙 ' + st.money, 10, 18, 16, '#5a4400', 'left', 'bold', 156);
+  const nxt = st.wave < WAVES.length ? 'Ondata ' + (st.wave+1) + '/' + WAVES.length + ' · ' + preview(st.wave) : 'Ultima ondata!';
+  tx(nxt, 10, 41, 11, '#7a6a30', 'left', 'bold', 158);
+  // timer prossima ondata (non è un pulsante)
+  const warn = st.cd !== null && st.cd <= 5;
+  ctx.fillStyle = warn ? '#ffb3b3' : '#fff'; rr(172, 10, 56, 30, 15); ctx.fill();
+  tx(st.cd !== null ? '⏳' + Math.max(0, Math.ceil(st.cd)) : '⚔️', 200, 25, 14, warn ? '#a22' : '#5a4400', 'center', 'bold', 50);
+  btn(234, 8, 36, 32, () => togglePause(), st.paused ? '#ffd95a' : '#fff', st.paused ? '▶️' : '⏸️', 15, '#12456b', '#bcd');
+  btn(276, 8, 36, 32, () => { st.speed = st.speed === 1 ? 2 : 1; }, st.speed === 2 ? '#8fd0ff' : '#fff', '⏩', 15, '#12456b', '#bcd');
+  btn(318, 8, 36, 32, () => { sound = !sound; if (sound) initAudio(); }, '#fff', sound ? '🔊' : '🔇', 15, '#12456b', '#bcd');
+
+  // barra in basso
+  ctx.fillStyle = '#fff3b8'; ctx.fillRect(0, BAR_Y, 360, 640 - BAR_Y);
+  ctx.fillStyle = '#ffd95a'; ctx.fillRect(0, BAR_Y, 360, 3);
+  if (st.selT) {
+    const t = st.selT, b = TW[t.type], s = tstat(t);
+    tx(b.e + ' ' + b.n + ' · livello ' + t.lvl + (t.lvl >= MAXL ? ' (MAX)' : ''), 180, BAR_Y + 17, 14, '#5a4400');
+    tx(b.info, 180, BAR_Y + 36, 11, '#6a5a20', 'center', 'normal');
+    tx(t.lvl < MAXL ? 'Trascina sopra ' + (b.f ? 'un\'altra ' : 'un altro ') + b.n + ' di livello ' + t.lvl + (b.f ? ' per unirle' : ' per unirli') : 'Livello massimo! ✨', 180, BAR_Y + 52, 11, '#3b7fb8', 'center', 'bold');
+    const armed = st.sellArm === t;
+    btn(8, BAR_Y + 64, 250, 32, sell, armed ? '#ffd0d0' : '#fff', armed ? 'Sicura? Tocca di nuovo per vendere' : '💰 Vendi  +' + Math.floor(t.spent*.7) + '🪙', 14, armed ? '#a22' : '#12456b', '#bcd');
+    btn(266, BAR_Y + 64, 86, 32, () => { st.selT = null; st.sellArm = null; }, '#fff', '✖ Chiudi', 13, '#a33', '#bcd');
+  } else {
+    const hint = tip();
+    if (hint) tx(hint, 180, BAR_Y + 13, 12 + Math.sin(clock*6)*.6, '#2f7fc4', 'center', 'bold');
+    else tx(st.sel ? 'Tocca un quadretto per piazzarla' : 'Trascina due torri uguali una sull\'altra: si uniscono ✨', 180, BAR_Y + 13, 11, '#7a6a30', 'center', 'normal');
+    TW_KEYS.forEach((k, i) => {
+      const b = TW[k], x = 8 + i*118, y = BAR_Y + 24, w = 112, h = 74, ok = st.money >= b.cost, on = st.sel === k;
+      ui.push({ x, y, w, h, fn: () => { st.sel = on ? null : k; st.selT = null; } });
+      ctx.fillStyle = on ? '#8fd0ff' : '#c9b86a'; rr(x, y + 3, w, h, 12); ctx.fill();
+      ctx.fillStyle = on ? '#d8f0ff' : (ok ? '#fff' : '#f1ece0'); rr(x, y, w, h, 12); ctx.fill();
+      if (on) { ctx.strokeStyle = '#3b9be0'; ctx.lineWidth = 3; rr(x, y, w, h, 12); ctx.stroke(); }
+      ctx.globalAlpha = ok ? 1 : .5; em(b.e, x + 20, y + 21, 26); ctx.globalAlpha = 1;
+      tx(b.n, x + 68, y + 14, 12, '#33466b');
+      tx(b.cost + '🪙', x + 68, y + 29, 12, ok ? '#a06a00' : '#b66');
+      tx(b.d[0], x + w/2, y + 50, 11, '#556', 'center', 'normal', w - 6);
+      tx(b.d[1], x + w/2, y + 63, 11, '#556', 'center', 'normal', w - 6);
+    });
+  }
+}
+
+function loop(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (st) { update(dt); draw(); }
+  requestAnimationFrame(loop);
+}
+
+/* ============ SCHERMATE ============ */
+function showOv(html) { ov.innerHTML = html; ov.style.display = 'flex'; }
+function hideOv() { ov.style.display = 'none'; ov.innerHTML = ''; }
+function hearts() {
+  for (let i = 0; i < 26; i++) {
+    const h = document.createElement('div'); h.className = 'heart'; h.textContent = ['💛','💙','💋','💌'][i % 4];
+    h.style.left = Math.random()*95 + '%'; h.style.animationDuration = (4 + Math.random()*4) + 's'; h.style.animationDelay = (Math.random()*3) + 's';
+    ov.appendChild(h);
+  }
+}
+function showStart() {
+  const sv = loadSave();
+  showOv(`
+    <h1>Per Emma 💛</h1>
+    <p>Un piccolo gioco fatto da ${CFG.firma},<br>solo per te, patata.</p>
+    <div class="steps">
+      Bugie 🤥, silenzi 😶, dubbi 🌫️, rabbia 😡 e orgoglio 🛡️ vogliono arrivare alla nostra panchina 🌅.<br>
+      <b>1.</b> Scegli una torre in basso e tocca un quadretto<br>
+      <b>2.</b> Le ondate partono da sole: guarda il timer ⏳<br>
+      <b>3.</b> <b>Trascina</b> una torre sopra un'altra uguale: si uniscono e salgono di livello!<br>
+      <b>4.</b> Tocca una torre per vedere cosa fa
+    </div>
+    <div>
+      <button class="btn" onclick="startGame()">Gioca 💋</button>
+      ${sv ? '<button class="btn blue" onclick="continueGame()">Continua</button>' : ''}
+    </div>
+    <small>Si gioca anche con un dito solo 😉</small>`);
+}
+function startGame() { initAudio(); clearSave(); newGame(); hideOv(); beep(523, .1, 'triangle'); }
+function continueGame() {
+  initAudio(); const d = loadSave(); newGame();
+  if (d) { st.wave = d.wave; st.money = d.money; st.lives = Math.max(d.lives, 5); st.cd = 15; st.merged = !!d.merged; d.towers.forEach(a => addTower(a[0], a[1], a[2], a[3], a[4])); }
+  hideOv();
+}
+function lose() {
+  st.over = true;
+  showOv(`
+    <h2>Uffa, nana 🥺</h2>
+    <p>I problemi sono arrivati alla nostra panchina.<br>Niente paura: rigiochi questa ondata, le tue torri restano e ti regalo 80🪙.</p>
+    <small>Consiglio: le 💌 Lettere sono le migliori contro 🛡️ e 💔</small>
+    <button class="btn" onclick="retry()">Riprova 💪</button>`);
+}
+function retry() {
+  st.en = []; st.proj = []; st.spawn = []; st.lives = START_LIVES; st.money += 80; st.over = false; st.paused = false;
+  st.wave = Math.max(0, st.wave - 1); st.cd = 15; hideOv();
+}
+function win() {
+  st.over = true; clearSave(); beep(523, .2, 'triangle'); beep(659, .2, 'triangle', .05, .15); beep(784, .3, 'triangle', .05, .3);
+  setTimeout(() => showPage(0), 900);
+}
+function showPage(i) {
+  const m = CFG.msgs[i], last = i === CFG.msgs.length - 1;
+  showOv(`
+    ${i === 0 ? '<h1>Hai vinto! 🎉</h1>' : ''}
+    ${m.photo ? `<img class="photo" src="${m.photo}" onerror="this.style.display='none'">` : ''}
+    <p style="font-size:17px">${m.t}</p>
+    <button class="btn" onclick="${last ? 'showChoices()' : 'showPage(' + (i+1) + ')'}">${last ? 'Scegli 🍽️' : 'Avanti ›'}</button>`);
+  hearts();
+}
+function showChoices() {
+  showOv(`
+    <h2>Dove andiamo a cena?</h2>
+    <p>Scegli quello che ti va, bimba.</p>
+    <div class="choices">
+      ${CFG.dinners.map((d, i) => `<button class="choice" onclick="pick(${i})"><span>${d.e}</span>${d.n}</button>`).join('')}
+    </div>`);
+}
+function pick(i) {
+  const d = CFG.dinners[i], text = encodeURIComponent('Ho scelto: ' + d.n + ' ' + d.e + ' 💛');
+  const url = 'https://wa.me/' + CFG.whatsapp + '?text=' + text;
+  showOv(`
+    <h1>${d.e}</h1>
+    <h2>${d.n}, perfetto!</h2>
+    <p>Quando vuoi tu, senza fretta.<br>Io ci sono. 💛</p>
+    <a class="btn" style="text-decoration:none;display:inline-block" href="${url}" target="_blank" rel="noopener">Dimmelo su WhatsApp 💬</a>
+    <button class="btn blue" onclick="showStart()">Rigioca</button>`);
+  hearts();
+}
+
+/* ============ AVVIO ============ */
+resize(); newGame(); showStart();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
