@@ -633,6 +633,8 @@ function pick(i) {
 
 /* ============ AVVIO ============ */
 resize(); newGame(); showStart();
+// scarica subito le foto, così nel finale compaiono senza attesa
+CFG.msgs.forEach(m => { if (m.photo) new Image().src = m.photo; });
 requestAnimationFrame(loop);
 </script>
 </body>
